@@ -14,6 +14,18 @@
             pointer-events: auto;
             cursor: pointer;
         }
+        .text-popup {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 300px;
+            font-size: 14px;
+            z-index: 9999;
+        }
         #pdfContainer { position: relative; }
     </style>
 </head>
@@ -21,8 +33,11 @@
     <h2>PDF.js Viewer</h2>
     <input type="file" id="uploadPDF" accept="application/pdf" style="display: none;">
     <div id="pdfContainer"></div>
+    <div id="textPopup" class="text-popup" style="display:none;"></div>
 
     <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
         const useUpload = true;
         const hardcodedPDF = 'elk.pdf';
 
@@ -31,6 +46,9 @@
             { "page": 1, "offset": 250, "length": 500 },
             { "page": 2, "offset": 5, "length": 30 }
         ];
+
+        const pageTextContents = new Map();
+        const pageViewports = new Map();
 
         if (useUpload) {
             document.getElementById('uploadPDF').style.display = 'block';
@@ -81,6 +99,8 @@
 
             page.render(renderContext).promise.then(() => {
                 page.getTextContent().then(textContent => {
+                    pageTextContents.set(canvas, textContent);
+                    pageViewports.set(canvas, viewport);
                     highlightText(context, textContent, pageNum, viewport, scale);
                 });
             });
@@ -119,8 +139,18 @@
             });
         }
 
+        function showTextPopup(text) {
+            const popup = document.getElementById('textPopup');
+            popup.textContent = text;
+            popup.style.display = 'block';
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 4000);
+        }
+
         function setupDragToHighlight(canvas) {
             let startX, startY, selectionBox;
+            let canvasScaleX, canvasScaleY;
 
             canvas.addEventListener('mousedown', (e) => {
                 const rect = canvas.getBoundingClientRect();
@@ -129,8 +159,8 @@
 
                 const canvasWidth = canvas.width;
                 const canvasHeight = canvas.height;
-                const canvasScaleX = canvasWidth / rect.width;
-                const canvasScaleY = canvasHeight / rect.height;
+                canvasScaleX = canvasWidth / rect.width;
+                canvasScaleY = canvasHeight / rect.height;
 
                 startX = (e.clientX - canvasLeft) * canvasScaleX;
                 startY = (e.clientY - canvasTop) * canvasScaleY;
@@ -150,8 +180,8 @@
                 document.getElementById('pdfContainer').appendChild(selectionBox);
 
                 const onMouseMove = (moveEvent) => {
-                    let currentX = (moveEvent.clientX - canvasLeft) * canvasScaleX;
-                    let currentY = (moveEvent.clientY - canvasTop) * canvasScaleY;
+                    let currentX = (moveEvent.clientX - rect.left) * canvasScaleX;
+                    let currentY = (moveEvent.clientY - rect.top) * canvasScaleY;
 
                     currentX = Math.max(0, Math.min(currentX, canvasWidth));
                     currentY = Math.max(0, Math.min(currentY, canvasHeight));
@@ -166,9 +196,41 @@
                 };
 
                 const onMouseUp = (upEvent) => {
-                    onMouseMove(upEvent); // Ensure box is finalized
+                    onMouseMove(upEvent);
                     document.removeEventListener('mousemove', onMouseMove);
                     document.removeEventListener('mouseup', onMouseUp);
+
+                    const selectionRect = selectionBox.getBoundingClientRect();
+                    const textContent = pageTextContents.get(canvas);
+                    const viewport = pageViewports.get(canvas);
+                    if (!textContent || !viewport) return;
+
+                    const box = canvas.getBoundingClientRect();
+
+                    const selectedText = textContent.items
+                        .filter(item => {
+                            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+                            const x = tx[4];
+                            const y = tx[5] - item.height;
+                            const width = item.width;
+                            const height = item.height;
+
+                            const clientX = box.left + (x / canvas.width) * box.width;
+                            const clientY = box.top + (y / canvas.height) * box.height;
+                            const clientWidth = (width / canvas.width) * box.width;
+                            const clientHeight = (height / canvas.height) * box.height;
+
+                            return (
+                                clientX < selectionRect.right &&
+                                clientX + clientWidth > selectionRect.left &&
+                                clientY < selectionRect.bottom &&
+                                clientY + clientHeight > selectionRect.top
+                            );
+                        })
+                        .map(item => item.str)
+                        .join('');
+
+                    if (selectedText) showTextPopup(selectedText);
                 };
 
                 document.addEventListener('mousemove', onMouseMove);
