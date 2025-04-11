@@ -1,136 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>PDF.js Highlight Demo</title>
-  <style>
-    canvas {
-      display: block;
-      margin-bottom: 20px;
-      border: 1px solid #ccc;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.js Viewer with Highlighting</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        canvas { border: 1px solid black; display: block; margin-bottom: 10px; }
+    </style>
 </head>
 <body>
-  <h1>PDF.js Highlight Demo</h1>
-  <input type="file" id="pdfFileInput" accept="application/pdf" />
+    <h2>PDF.js Viewer</h2>
+    <input type="file" id="uploadPDF" accept="application/pdf">
+    <div id="pdfContainer"></div>
 
-  <!-- Updated script URL to ensure proper loading -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    // Set workerSrc to avoid deprecation warning
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    <script>
+        const highlightData = [
+            { "page": 1, "offset": 10, "length": 15 },
+            { "page": 1, "offset": 250, "length": 20 },
+            { "page": 2, "offset": 5, "length": 30 }
+        ];
 
-    const highlightData = [
-      { "page": 1, "offset": 10, "length": 1 },
-      { "page": 1, "offset": 30, "length": 1 },
-      { "page": 1, "offset": 50, "length": 30 }
-    ];
-
-    document.getElementById('pdfFileInput').addEventListener('change', loadPDF);
-
-    function loadPDF() {
-      if (typeof pdfjsLib === 'undefined') {
-        console.error('PDF.js library failed to load.');
-        alert('PDF.js library failed to load. Please check your internet connection or CDN URL.');
-        return;
-      }
-
-      const fileInput = document.getElementById('pdfFileInput');
-      const file = fileInput.files[0];
-
-      if (!file) {
-        alert("Please select a PDF file.");
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const typedArray = new Uint8Array(e.target.result);
-        const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-
-        loadingTask.promise.then(pdf => {
-          const annotationsByPage = {};
-
-          highlightData.forEach(ann => {
-            if (!annotationsByPage[ann.page]) {
-              annotationsByPage[ann.page] = [];
+        document.getElementById('uploadPDF').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const typedarray = new Uint8Array(event.target.result);
+                    renderPDF(typedarray);
+                };
+                reader.readAsArrayBuffer(file);
             }
-            annotationsByPage[ann.page].push(ann);
-          });
+        });
 
-          for (const [pageNum, annotations] of Object.entries(annotationsByPage)) {
-            pdf.getPage(parseInt(pageNum)).then(page => {
-              renderPageWithHighlights(page, annotations);
+        function renderPDF(data) {
+            pdfjsLib.getDocument({ data }).promise.then(pdf => {
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    pdf.getPage(i).then(page => {
+                        renderPageWithHighlights(page, i);
+                    });
+                }
+            }).catch(error => {
+                console.error("Error loading PDF: ", error);
             });
-          }
-        }).catch(error => {
-          console.error("Error loading PDF: ", error);
-        });
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    function renderPageWithHighlights(page, annotations) {
-      const scale = 1.5;
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      document.body.appendChild(canvas);
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-
-      page.render(renderContext).promise.then(() => {
-        page.getTextContent().then(textContent => {
-          annotations.forEach(annotation => {
-            highlightText(context, textContent, annotation, viewport);
-          });
-        });
-      });
-    }
-
-    function buildCharMap(textContent) {
-      let charIndex = 0;
-      const map = [];
-
-      for (const item of textContent.items) {
-        const length = item.str.length;
-        map.push({
-          start: charIndex,
-          end: charIndex + length,
-          item: item
-        });
-        charIndex += length;
-      }
-
-      return map;
-    }
-
-    function highlightText(context, textContent, annotation, viewport) {
-      const charMap = buildCharMap(textContent);
-      const start = annotation.offset;
-      const end = start + annotation.length;
-
-      for (const entry of charMap) {
-        if (entry.end > start && entry.start < end) {
-          const item = entry.item;
-
-          const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-          const x = tx[4];
-          const y = tx[5] - item.height;
-
-          context.fillStyle = "yellow";
-          context.globalAlpha = 0.4;
-          context.fillRect(x, y, item.width, item.height);
         }
-      }
-    }
-  </script>
+
+        function renderPageWithHighlights(page, pageNum) {
+            const scale = 1.5;
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            document.getElementById('pdfContainer').appendChild(canvas);
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+
+            page.render(renderContext).promise.then(() => {
+                page.getTextContent().then(textContent => {
+                    highlightText(context, textContent, pageNum, viewport, scale);
+                });
+            });
+        }
+
+        function highlightText(context, textContent, pageNum, viewport,scale) {
+            let charCount = 0;
+            const highlights = highlightData.filter(h => h.page === pageNum);
+
+            textContent.items.forEach(textItem => {
+                let text = textItem.str;
+                highlights.forEach(annotation => {
+                    let startOffset = annotation.offset - charCount;
+                    let endOffset = startOffset + annotation.length;
+                    if (startOffset >= 0 && startOffset < text.length) {
+                        const tx = pdfjsLib.Util.transform(viewport.transform, textItem.transform);
+                        const x = tx[4];
+                        const y = tx[5] - textItem.height;
+                        context.fillStyle = "yellow";
+                        context.globalAlpha = 0.5;
+                        context.fillRect(x, y, textItem.width * scale, textItem.height);
+                    }
+                });
+                charCount += text.length;
+            });
+        }
+    </script>
 </body>
 </html>
