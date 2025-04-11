@@ -11,27 +11,38 @@
 </head>
 <body>
     <h2>PDF.js Viewer</h2>
-    <input type="file" id="uploadPDF" accept="application/pdf">
+    <input type="file" id="uploadPDF" accept="application/pdf" style="display: none;">
     <div id="pdfContainer"></div>
 
     <script>
+        const useUpload = false; // Change this to true to enable manual upload
+        const hardcodedPDF = 'VRRENEWAL-5.pdf'; // Replace with your local or hosted PDF path
+
         const highlightData = [
             { "page": 1, "offset": 10, "length": 15 },
-            { "page": 1, "offset": 250, "length": 20 },
+            { "page": 1, "offset": 250, "length": 500 },
             { "page": 2, "offset": 5, "length": 30 }
         ];
 
-        document.getElementById('uploadPDF').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const typedarray = new Uint8Array(event.target.result);
-                    renderPDF(typedarray);
-                };
-                reader.readAsArrayBuffer(file);
-            }
-        });
+        if (useUpload) {
+            document.getElementById('uploadPDF').style.display = 'block';
+            document.getElementById('uploadPDF').addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const typedarray = new Uint8Array(event.target.result);
+                        renderPDF(typedarray);
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            });
+        } else {
+            fetch(hardcodedPDF)
+                .then(response => response.arrayBuffer())
+                .then(data => renderPDF(new Uint8Array(data)))
+                .catch(error => console.error('Failed to load hardcoded PDF:', error));
+        }
 
         function renderPDF(data) {
             pdfjsLib.getDocument({ data }).promise.then(pdf => {
