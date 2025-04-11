@@ -7,6 +7,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         canvas { border: 1px solid black; display: block; margin-bottom: 10px; }
+        .selection-box {
+            position: absolute;
+            border: 2px solid rgba(0, 0, 255, 0.5);
+            background-color: rgba(0, 0, 255, 0.2);
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        #pdfContainer { position: relative; }
     </style>
 </head>
 <body>
@@ -15,8 +23,8 @@
     <div id="pdfContainer"></div>
 
     <script>
-        const useUpload = false; // Change this to true to enable manual upload
-        const hardcodedPDF = 'elk.pdf'; // Replace with your local or hosted PDF path
+        const useUpload = true;
+        const hardcodedPDF = 'elk.pdf';
 
         const highlightData = [
             { "page": 1, "offset": 10, "length": 15 },
@@ -63,6 +71,7 @@
             const context = canvas.getContext("2d");
             canvas.width = viewport.width;
             canvas.height = viewport.height;
+            canvas.style.position = 'relative';
             document.getElementById('pdfContainer').appendChild(canvas);
 
             const renderContext = {
@@ -75,6 +84,8 @@
                     highlightText(context, textContent, pageNum, viewport, scale);
                 });
             });
+
+            setupDragToHighlight(canvas);
         }
 
         function highlightText(context, textContent, pageNum, viewport, scale) {
@@ -105,6 +116,48 @@
                 });
 
                 charCount += text.length;
+            });
+        }
+
+        function setupDragToHighlight(canvas) {
+            let startX, startY, selectionBox;
+
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+
+                selectionBox = document.createElement('div');
+                selectionBox.className = 'selection-box';
+                selectionBox.style.left = `${startX}px`;
+                selectionBox.style.top = `${startY}px`;
+                selectionBox.style.width = '0px';
+                selectionBox.style.height = '0px';
+
+                selectionBox.addEventListener('click', () => {
+                    selectionBox.remove();
+                });
+
+                document.getElementById('pdfContainer').appendChild(selectionBox);
+
+                const onMouseMove = (moveEvent) => {
+                    const currentX = moveEvent.clientX - rect.left;
+                    const currentY = moveEvent.clientY - rect.top;
+                    const width = currentX - startX;
+                    const height = currentY - startY;
+                    selectionBox.style.width = Math.abs(width) + 'px';
+                    selectionBox.style.height = Math.abs(height) + 'px';
+                    selectionBox.style.left = (width < 0 ? currentX : startX) + 'px';
+                    selectionBox.style.top = (height < 0 ? currentY : startY) + 'px';
+                };
+
+                const onMouseUp = () => {
+                    canvas.removeEventListener('mousemove', onMouseMove);
+                    canvas.removeEventListener('mouseup', onMouseUp);
+                };
+
+                canvas.addEventListener('mousemove', onMouseMove);
+                canvas.addEventListener('mouseup', onMouseUp);
             });
         }
     </script>
