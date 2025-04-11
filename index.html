@@ -124,8 +124,16 @@
 
             canvas.addEventListener('mousedown', (e) => {
                 const rect = canvas.getBoundingClientRect();
-                startX = e.clientX - rect.left;
-                startY = e.clientY - rect.top;
+                const canvasLeft = rect.left;
+                const canvasTop = rect.top;
+
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const canvasScaleX = canvasWidth / rect.width;
+                const canvasScaleY = canvasHeight / rect.height;
+
+                startX = (e.clientX - canvasLeft) * canvasScaleX;
+                startY = (e.clientY - canvasTop) * canvasScaleY;
 
                 selectionBox = document.createElement('div');
                 selectionBox.className = 'selection-box';
@@ -134,30 +142,37 @@
                 selectionBox.style.width = '0px';
                 selectionBox.style.height = '0px';
 
-                selectionBox.addEventListener('click', () => {
+                selectionBox.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
                     selectionBox.remove();
                 });
 
                 document.getElementById('pdfContainer').appendChild(selectionBox);
 
                 const onMouseMove = (moveEvent) => {
-                    const currentX = moveEvent.clientX - rect.left;
-                    const currentY = moveEvent.clientY - rect.top;
+                    let currentX = (moveEvent.clientX - canvasLeft) * canvasScaleX;
+                    let currentY = (moveEvent.clientY - canvasTop) * canvasScaleY;
+
+                    currentX = Math.max(0, Math.min(currentX, canvasWidth));
+                    currentY = Math.max(0, Math.min(currentY, canvasHeight));
+
                     const width = currentX - startX;
                     const height = currentY - startY;
+
                     selectionBox.style.width = Math.abs(width) + 'px';
                     selectionBox.style.height = Math.abs(height) + 'px';
                     selectionBox.style.left = (width < 0 ? currentX : startX) + 'px';
                     selectionBox.style.top = (height < 0 ? currentY : startY) + 'px';
                 };
 
-                const onMouseUp = () => {
-                    canvas.removeEventListener('mousemove', onMouseMove);
-                    canvas.removeEventListener('mouseup', onMouseUp);
+                const onMouseUp = (upEvent) => {
+                    onMouseMove(upEvent); // Ensure box is finalized
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
                 };
 
-                canvas.addEventListener('mousemove', onMouseMove);
-                canvas.addEventListener('mouseup', onMouseUp);
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
             });
         }
     </script>
