@@ -66,24 +66,33 @@
             });
         }
 
-        function highlightText(context, textContent, pageNum, viewport,scale) {
+        function highlightText(context, textContent, pageNum, viewport, scale) {
             let charCount = 0;
             const highlights = highlightData.filter(h => h.page === pageNum);
 
             textContent.items.forEach(textItem => {
                 let text = textItem.str;
+                const tx = pdfjsLib.Util.transform(viewport.transform, textItem.transform);
+                const x = tx[4];
+                const y = tx[5] - textItem.height;
+                const charWidth = (textItem.width * scale) / text.length;
+
                 highlights.forEach(annotation => {
                     let startOffset = annotation.offset - charCount;
                     let endOffset = startOffset + annotation.length;
-                    if (startOffset >= 0 && startOffset < text.length) {
-                        const tx = pdfjsLib.Util.transform(viewport.transform, textItem.transform);
-                        const x = tx[4];
-                        const y = tx[5] - textItem.height;
-                        context.fillStyle = "yellow";
-                        context.globalAlpha = 0.5;
-                        context.fillRect(x, y, textItem.width * scale, textItem.height);
+
+                    if (startOffset < text.length && endOffset > 0) {
+                        const start = Math.max(startOffset, 0);
+                        const end = Math.min(endOffset, text.length);
+                        for (let i = start; i < end; i++) {
+                            const charX = x + charWidth * i;
+                            context.fillStyle = "yellow";
+                            context.globalAlpha = 0.5;
+                            context.fillRect(charX, y, charWidth, textItem.height);
+                        }
                     }
                 });
+
                 charCount += text.length;
             });
         }
