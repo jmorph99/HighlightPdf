@@ -173,9 +173,10 @@
                 selectionBox.style.height = '0px';
 
                 selectionBox.addEventListener('contextmenu', (event) => {
-                    event.preventDefault();
-                    selectionBox.remove();
-                });
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.remove();
+});
 
                 document.getElementById('pdfContainer').appendChild(selectionBox);
 
